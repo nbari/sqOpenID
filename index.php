@@ -36,7 +36,7 @@ require_once 'sqopenid.php';
 <pre>
   * http://test-id.net/RP/HMACSHA256.aspx
   * http://test-id.net/RP/VerifyReturnTo.aspx
-  * http://test-id.net/RP/VerifyAssertionDiscovery.aspx # needs to be checked
+  * http://test-id.net/RP/VerifyAssertionDiscovery.aspx # needs to be checked, when  Claimed idnetifier as fragment or insignificant query fails
   * http://test-id.net/RP/SignatureCheck20.aspx
   * http://test-id.net/RP/ResponseNonceCheck.aspx
   * http://test-id.net/RP/DiscoveryAcceptHeader.aspx
