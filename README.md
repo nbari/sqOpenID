@@ -35,13 +35,14 @@ For a full authentication flow, check the form in file 'index.php'.
 
 Class, currently only authenticates, no SREG or AX extensions, work still pending...
 
-basic example:
+Basic example:
 
     $oi = new sqOpenID();
     if ($oi->getResponse('openid_mode')) {
       return $oi->validate();
     } else {
       if ($oi->setIdentity('User-Supplied Identifier')->Discover()) {
+        /* redirect user to OP Endpoint URL */
         $oi->Auth();
       } else {
         echo 'no OP found';
