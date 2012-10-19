@@ -27,13 +27,15 @@ Basic usage:
 
 In cases where you want to add users to a system via 'webform' and want to verify if the OP Endpoing exists, you can use something like:
 
+<code>
 echo (new sqOpenID())->setIdentity('User-Supplied Identifier')->Discover() ? true : false;
+</code>
 
 For a full authentication flow, check the form in file 'index.php'.
 
 Class, currently only authenticates, no SREG or AX extensions, work still pending...
 
-
+<code>
 $oi = new sqOpenID();
 
 if ($oi->getResponse('openid_mode')) {
@@ -49,3 +51,4 @@ if ($oi->getResponse('openid_mode')) {
   }
 
 }
+</code>
