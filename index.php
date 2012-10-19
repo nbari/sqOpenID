@@ -41,6 +41,7 @@ require_once 'sqopenid.php';
   * http://test-id.net/RP/ResponseNonceCheck.aspx
   * http://test-id.net/RP/DiscoveryAcceptHeader.aspx
   * http://test-id.net/RP/POSTAssertionWithUtf8.aspx
+  * http://test-id.net/RP/SregAccountCreation.aspx?test=0Wi5vmzW
 
   others:
   * https://www.google.com/accounts/o8/id
