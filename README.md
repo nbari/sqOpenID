@@ -39,7 +39,12 @@ Basic example:
 
     $oi = new sqOpenID();
     if ($oi->getResponse('openid_mode')) {
-      return $oi->validate();
+      if ($oi->validate()) {
+        /* id to store on DB etc.*/
+        $claimed_id = $oi->getClaimedID();
+      } else {
+        return false;
+      }
     } else {
       if ($oi->setIdentity('User-Supplied Identifier')->Discover()) {
         /* redirect user to OP Endpoint URL */
