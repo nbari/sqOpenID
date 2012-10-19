@@ -55,10 +55,13 @@ require_once 'sqopenid.php';
         echo 'response: <pre>';
         print_r($oi->getResponse());
         echo '</pre>Authentication: ' . ( $oi->validate() ? '<span id="true">True</span>' : '<span id="false">False</span>' );
-        echo '<br>Claimed ID: ' . $oi->getClaimedID();
+        echo '<br>Claimed ID: ' . $oi->getClaimedID() .'<br>Attributes:<pre>';
+        print_r($oi->getAttributes());
       } else {
         if (isset($_POST['openid_identifier'])) {
           if ($oi->setIdentity($_POST['openid_identifier'])->Discover()) {
+            $oi->required('nickname', 'email', 'fullname', 'dob', 'gender', 'postcode', 'country');
+            $oi->optional('language', 'timezone');
             /**
              * if OP Endpoint URL found, redirect the user to it.
              */

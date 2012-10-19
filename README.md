@@ -33,8 +33,6 @@ echo (new sqOpenID())->setIdentity('User-Supplied Identifier')->Discover() ? tru
 
 For a full authentication flow, check the form in file 'index.php'.
 
-Class, currently only authenticates, no SREG or AX extensions, work still pending...
-
 Basic example:
 
     $oi = new sqOpenID();
@@ -47,6 +45,10 @@ Basic example:
       }
     } else {
       if ($oi->setIdentity('User-Supplied Identifier')->Discover()) {
+        /* sred/ax request fields */
+        $oi->required('nickname', 'email', 'fullname', 'dob', 'gender', 'postcode', 'country');
+        $oi->optional('language', 'timezone');
+
         /* redirect user to OP Endpoint URL */
         $oi->Auth();
       } else {

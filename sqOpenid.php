@@ -134,6 +134,27 @@ class sqOpenID {
   private $response = array ();
 
   /**
+   * Sreg <==> AX
+   * @var array
+   */
+  protected  $sreg_to_ax = array (
+    'nickname' => 'namePerson/friendly',
+    'email'    => 'contact/email',
+    'fullname' => 'namePerson',
+    'dob'      => 'birthDate',
+    'gender'   => 'person/gender',
+    'postcode' => 'contact/postalCode/home',
+    'country'  => 'contact/country/home',
+    'language' => 'pref/language',
+    'timezone' => 'pref/timezone'
+    );
+
+  /**
+   * required and optional params
+   */
+  private $required = array(), $optional = array();
+
+  /**
    * __construct
    *
    * @see http://openid.net/specs/openid-authentication-2_0.html#anchor27
@@ -225,6 +246,20 @@ class sqOpenID {
      * return this so it can be chainable
      */
     return $this;
+  }
+
+  /**
+   * set required params
+   */
+  public function required() {
+    $this->required = array_intersect_key( $this->sreg_to_ax, array_flip(func_get_args()) );
+  }
+
+  /**
+   * set optional params
+   */
+  public function optional() {
+    $this->optional = array_intersect_key( $this->sreg_to_ax, array_flip(func_get_args()) );
   }
 
   /**
@@ -501,7 +536,39 @@ class sqOpenID {
         'openid.return_to' => $this->return_to,
         'openid.realm' => $this->realm
     );
+    if ($this->required || $this->optional) {
+      /**
+       * sreg parameters
+       * @link http://openid.net/specs/openid-simple-registration-extension-1_0.html
+       * @see 3. Request Format
+       */
+      $params['openid.ns.sreg'] = self::OPENID_NS_SREG;
+      if ($this->required) {
+        $params['openid.sreg.required'] = implode(',', array_keys($this->required));
+      }
+      if ($this->optional) {
+        $params['openid.sreg.optional'] = implode(',', array_keys($this->optional));
+      }
 
+      /**
+       * AX parameters
+       * @link http://openid.net/specs/openid-attribute-exchange-1_0.html
+       * @see 5.  Fetch Message
+       */
+      $params['openid.ns.ax'] = self::OPENID_AX;
+      $params['openid.ax.mode'] = 'fetch_request';
+      foreach (array('required','optional') as $type) {
+        foreach ($this->$type as $sreg => $ax) {
+          $params["openid.ax.type.$sreg"] = 'http://axschema.org/' . $ax;
+        }
+      }
+      if ($this->required) {
+        $params['openid.ax.required'] = implode( ',', array_keys($this->required));
+      }
+      if ($this->optional) {
+        $params['openid.ax.if_available'] = implode( ',', array_keys($this->optional));
+      }
+    }
     /**
      * Association data stored in a session
      */
@@ -805,6 +872,91 @@ class sqOpenID {
           (empty( $parts['fragment'] ) ? '' : "#{$parts['fragment']}");
 
     return $url;
+  }
+
+  /**
+   * getAxAttributes
+   *
+   * @version LightOpenID
+   * @return array
+   */
+  public function getAxAttributes() {
+    $alias = null;
+    if ($this->getResponse('openid_ns_ax') && $this->getResponse('openid_ns_ax') != self::OPENID_AX) { // It's the most likely case, so we'll check it before
+      $alias = 'ax';
+    } else {
+      // 'ax' prefix is either undefined, or points to another extension,
+      // so we search for another prefix
+      foreach ( $this->response as $key => $val ) {
+        if (substr( $key, 0, strlen( 'openid_ns_' ) ) == 'openid_ns_' && $val == self::OPENID_AX) {
+          $alias = substr( $key, strlen( 'openid_ns_' ) );
+          break;
+        }
+      }
+    }
+    if (! $alias) {
+      // An alias for AX schema has not been found,
+      // so there is no AX data in the OP's response
+      return array ();
+    }
+
+    $attributes = array ();
+    foreach ( explode( ',', $this->getResponse('openid_signed') ) as $key ) {
+      $keyMatch = $alias . '.value.';
+      if (substr( $key, 0, strlen( $keyMatch ) ) != $keyMatch) {
+        continue;
+      }
+      $key = substr( $key, strlen( $keyMatch ) );
+      if (! $this->getResponse('openid_' . $alias . '_type_' . $key)) {
+        // OP is breaking the spec by returning a field without
+        // associated ns. This shouldn't happen, but it's better
+        // to check, than cause an E_NOTICE.
+        continue;
+      }
+      $value = $this->getResponse('openid_' . $alias . '_value_' . $key);
+      $key = substr( $this->getResponse('openid_' . $alias . '_type_' . $key), strlen( 'http://axschema.org/' ) );
+
+      $attributes[$key] = $value;
+    }
+    return $attributes;
+  }
+
+  /**
+   * getSregAttributes
+   *
+   * @version LightOpenID
+   * @return array
+   */
+  public function getSregAttributes() {
+    $attributes = array ();
+    foreach ( explode( ',', $this->getResponse('openid_signed')) as $key ) {
+      $keyMatch = 'sreg.';
+      if (substr( $key, 0, strlen( $keyMatch ) ) != $keyMatch) {
+        continue;
+      }
+      $key = substr( $key, strlen( $keyMatch ) );
+      if (! isset( $this->sreg_to_ax[$key] )) {
+        // The field name isn't part of the SREG spec, so we ignore it.
+        continue;
+      }
+      $attributes[$this->sreg_to_ax[$key]] = $this->getResponse('openid_sreg_' . $key);
+    }
+    return $attributes;
+  }
+
+  /**
+   * Gets AX/SREG attributes provided by OP.
+   * should be used only after successful validaton.
+   * Note that it does not guarantee that any of the required/optional
+   * parameters will be present, or that there will be no other attributes
+   * besides those specified. In other words. OP may provide whatever
+   * information it wants to.
+   *
+   * @version LightOpenID
+   * @return Array Array of attributes with keys being the AX schema names,
+   */
+  public function getAttributes() {
+    return $this->getAxAttributes() + $this->getSregAttributes();
   }
 
 }
