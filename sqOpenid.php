@@ -549,7 +549,9 @@ class sqOpenID {
      */
     if (! isset( $_SESSION )) {
       session_start();
+    }
 
+    if (isset ($_SESSION)) {
       if ($mac_key = $this->associate()) {
         /**
          * A handle for an association between the Relying Party and the OP that
@@ -768,7 +770,6 @@ class sqOpenID {
     $private_key = gmp_random(16);
     $public_key = base64_encode($this->btwocEncode(gmp_strval(gmp_powm(self::OPENID_DH_GEN, $private_key, self::OPENID_DH_MODULUS))));
     /**
-     *
      * @see 8.1.1. Common Request Parameters
      */
     $params = array (
