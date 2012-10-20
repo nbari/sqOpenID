@@ -1,6 +1,5 @@
 <?php
 
-session_start();
 require_once 'sqopenid.php';
 
 ?>
@@ -61,8 +60,8 @@ require_once 'sqopenid.php';
       } else {
         if (isset($_POST['openid_identifier'])) {
           if ($oi->setIdentity($_POST['openid_identifier'])->Discover()) {
-            $oi->required('nickname', 'email', 'fullname', 'dob', 'gender', 'postcode', 'country');
-            $oi->optional('language', 'timezone');
+            $oi->required('namePerson/friendly', 'contact/email', 'namePerson', 'birthDate', 'person/gender', 'contact/postalCode/home', 'contact/country/home');
+            $oi->optional('pref/language', 'pref/timezone','contact/phone/default', 'contact/phone/cell', 'contact/phone/home');
             /**
              * if OP Endpoint URL found, redirect the user to it.
              */

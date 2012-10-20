@@ -134,25 +134,25 @@ class sqOpenID {
   private $response = array ();
 
   /**
-   * Sreg <==> AX
+   * AX <==> SREG
    * @var array
    */
-  protected  $sreg_to_ax = array (
-    'nickname' => 'namePerson/friendly',
-    'email'    => 'contact/email',
-    'fullname' => 'namePerson',
-    'dob'      => 'birthDate',
-    'gender'   => 'person/gender',
-    'postcode' => 'contact/postalCode/home',
-    'country'  => 'contact/country/home',
-    'language' => 'pref/language',
-    'timezone' => 'pref/timezone'
-    );
+  protected  $ax_to_sreg = array (
+    'namePerson/friendly' => 'nickname',
+    'contact/email' => 'email',
+    'namePerson' => 'fullname',
+    'birthDate' => 'dob',
+    'person/gender' => 'gender',
+    'contact/postalCode/home' => 'postcode',
+    'contact/country/home' => 'country',
+    'pref/language' => 'language',
+    'pref/timezone' => 'timezone'
+  );
 
   /**
-   * required and optional params
+   * required, optional and params used for sreg,ax
    */
-  private $required = array(), $optional = array();
+  private $required = array(), $optional = array(), $params = array();
 
   /**
    * __construct
@@ -250,16 +250,18 @@ class sqOpenID {
 
   /**
    * set required params
+   * @see OpenID Attribute Exchange 1.0 - Final
    */
   public function required() {
-    $this->required = array_intersect_key( $this->sreg_to_ax, array_flip(func_get_args()) );
+    $this->required = array_flip(func_get_args());
   }
 
   /**
    * set optional params
+   * @see OpenID Attribute Exchange 1.0 - Final
    */
   public function optional() {
-    $this->optional = array_intersect_key( $this->sreg_to_ax, array_flip(func_get_args()) );
+    $this->optional = array_flip(func_get_args());
   }
 
   /**
@@ -528,7 +530,7 @@ class sqOpenID {
    * @link http://openid.net/specs/openid-authentication-2_0.html#anchor27
    */
   public function Auth() {
-    $params = array (
+    $this->params = array (
         'openid.ns' => self::OPENID_NS_2_0,
         'openid.mode' => 'checkid_setup',
         'openid.claimed_id' => $this->claimed_id,
@@ -536,45 +538,18 @@ class sqOpenID {
         'openid.return_to' => $this->return_to,
         'openid.realm' => $this->realm
     );
-    if ($this->required || $this->optional) {
-      /**
-       * sreg parameters
-       * @link http://openid.net/specs/openid-simple-registration-extension-1_0.html
-       * @see 3. Request Format
-       */
-      $params['openid.ns.sreg'] = self::OPENID_NS_SREG;
-      if ($this->required) {
-        $params['openid.sreg.required'] = implode(',', array_keys($this->required));
-      }
-      if ($this->optional) {
-        $params['openid.sreg.optional'] = implode(',', array_keys($this->optional));
-      }
 
-      /**
-       * AX parameters
-       * @link http://openid.net/specs/openid-attribute-exchange-1_0.html
-       * @see 5.  Fetch Message
-       */
-      $params['openid.ns.ax'] = self::OPENID_AX;
-      $params['openid.ax.mode'] = 'fetch_request';
-      foreach (array('required','optional') as $type) {
-        foreach ($this->$type as $sreg => $ax) {
-          $params["openid.ax.type.$sreg"] = 'http://axschema.org/' . $ax;
-        }
-      }
-      if ($this->required) {
-        $params['openid.ax.required'] = implode( ',', array_keys($this->required));
-      }
-      if ($this->optional) {
-        $params['openid.ax.if_available'] = implode( ',', array_keys($this->optional));
-      }
+    if ($this->required || $this->optional) {
+      $this->sregParams();
+      $this->axParams();
     }
+
     /**
      * Association data stored in a session
      */
     if (! isset( $_SESSION )) {
       session_start();
-    } else {
+
       if ($mac_key = $this->associate()) {
         /**
          * A handle for an association between the Relying Party and the OP that
@@ -582,7 +557,7 @@ class sqOpenID {
          * Note: If no association handle is sent, the transaction will take
          * place in Stateless Mode.
          */
-        $params['openid.assoc_handle'] = $this->headers['assoc_handle'];
+        $this->params['openid.assoc_handle'] = $this->headers['assoc_handle'];
 
         /**
          * store the association_handle and mac_key (shared secret)
@@ -594,8 +569,63 @@ class sqOpenID {
     }
 
     $s = strpos( $this->provider, '?' ) ? '&' : '?';
-    $url = $this->provider . $s . http_build_query( $params, '', '&' );
+    $url = $this->provider . $s . http_build_query( $this->params, '', '&' );
+
+    /**
+     * redirect to OP Endpoint URL
+     */
     header( "Location: $url" );
+  }
+
+  /**
+   * sregParams
+   *
+   * @link http://openid.net/specs/openid-simple-registration-extension-1_0.html
+   * @see 3. Request Format
+   */
+  protected function sregParams() {
+    $this->params['openid.ns.sreg'] = self::OPENID_NS_SREG;
+    if ($this->required) {
+      $this->params['openid.sreg.required'] = implode(',',  array_intersect_key( $this->ax_to_sreg,  $this->required ) );
+    }
+    if ($this->optional) {
+      $this->params['openid.sreg.optional'] = implode(',',  array_intersect_key( $this->ax_to_sreg,  $this->optional ) );
+    }
+  }
+
+  /**
+   * AX parameters
+   *
+   * @link http://openid.net/specs/openid-attribute-exchange-1_0.html
+   * @see 5.  Fetch Message
+   */
+  protected function axParams() {
+    $this->params['openid.ns.ax'] = self::OPENID_AX;
+    $this->params['openid.ax.mode'] = 'fetch_request';
+
+    $aliases = array();
+    $required = array();
+    $optional = array();
+    /**
+     * $this->required contains an array of required AX parameters
+     * $this->optional contains an array of optional AX parameters.
+     */
+    foreach ( array ('required', 'optional') as $type ) {
+      foreach ( $this->$type as $path => $key ) {
+        $alias = strtr($path, '/', '_');
+        $aliases[$alias] = 'http://axschema.org/' . $path;
+        ${$type}[] = $alias;
+      }
+    }
+    foreach ( $aliases as $alias => $ns ) {
+      $this->params['openid.ax.type.' . $alias] = $ns;
+    }
+    if ($required) {
+      $this->params['openid.ax.required'] = implode( ',', $required );
+    }
+    if ($optional) {
+      $this->params['openid.ax.if_available'] = implode( ',', $optional );
+    }
   }
 
   /**
@@ -620,7 +650,7 @@ class sqOpenID {
       return false;
     }
 
-    $this->claimed_id = $this->normalizeURL( $this->getResponse( 'openid_claimed_id' ) );
+    $this->identity = $this->claimed_id = $this->normalizeURL( $this->getResponse( 'openid_claimed_id' ) );
 
     /**
      * check for association data in sessions if not fallback to stateless mode
@@ -887,7 +917,7 @@ class sqOpenID {
     } else {
       // 'ax' prefix is either undefined, or points to another extension,
       // so we search for another prefix
-      foreach ( $this->response as $key => $val ) {
+      foreach ( $this->getResponse() as $key => $val ) {
         if (substr( $key, 0, strlen( 'openid_ns_' ) ) == 'openid_ns_' && $val == self::OPENID_AX) {
           $alias = substr( $key, strlen( 'openid_ns_' ) );
           break;
@@ -929,17 +959,18 @@ class sqOpenID {
    */
   public function getSregAttributes() {
     $attributes = array ();
+    $sreg_to_ax = array_flip( $this->ax_to_sreg );
     foreach ( explode( ',', $this->getResponse('openid_signed')) as $key ) {
       $keyMatch = 'sreg.';
       if (substr( $key, 0, strlen( $keyMatch ) ) != $keyMatch) {
         continue;
       }
       $key = substr( $key, strlen( $keyMatch ) );
-      if (! isset( $this->sreg_to_ax[$key] )) {
+      if (! isset( $sreg_to_ax[$key] )) {
         // The field name isn't part of the SREG spec, so we ignore it.
         continue;
       }
-      $attributes[$this->sreg_to_ax[$key]] = $this->getResponse('openid_sreg_' . $key);
+      $attributes[$sreg_to_ax[$key]] = $this->getResponse('openid_sreg_' . $key);
     }
     return $attributes;
   }
