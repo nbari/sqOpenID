@@ -511,12 +511,8 @@ class sqOpenID {
           $this->identity = $this->claimed_id = trim( $link['href'] );
         }
       }
-      /**
-       * The protocol version when HTML discovery is performed is
-       * "http://specs.openid.net/auth/2.0/signon".
-       */
       if (! $this->claimed_id) {
-        $this->claimed_id = $this->identity;
+        $this->claimed_id = $this->identity = self::OPENID_IDENTIFIER_SELECT;
       }
       return ($this->provider) ? true : false;
     }
