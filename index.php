@@ -47,7 +47,7 @@ require_once 'sqopenid.php';
   * https://www.google.com/accounts/o8/id
   * me.yahoo.com
   * myopenid.com
-  * user.sign.io #beta
+  * sign.io
 </pre>
     <hr>
     <?php

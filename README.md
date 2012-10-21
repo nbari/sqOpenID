@@ -7,7 +7,7 @@ So far working with:
  * https://www.google.com/accounts/o8/id
  * me.yahoo.com
  * myopenid.com
- * user.sign.io
+ * sign.io
 
 Based on LightOpenID but using smart mode "Association", fallback to stateless mode "dumb mode".
 
@@ -67,3 +67,7 @@ Basic example:
         echo 'no OP found';
       }
     }
+
+work still pending...
+
+TODO: cache for keeping handlers and nonces
