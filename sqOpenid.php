@@ -541,29 +541,16 @@ class sqOpenID {
     }
 
     /**
-     * Association data stored in a session
+     * Create an Association and if possible store it in cache
      */
-    if (! isset( $_SESSION )) {
-      session_start();
-    }
-
-    if (isset ($_SESSION)) {
-      if ($mac_key = $this->associate()) {
-        /**
-         * A handle for an association between the Relying Party and the OP that
-         * SHOULD be used to sign the response.
-         * Note: If no association handle is sent, the transaction will take
-         * place in Stateless Mode.
-         */
-        $this->params['openid.assoc_handle'] = $this->headers['assoc_handle'];
-
-        /**
-         * store the association_handle and mac_key (shared secret)
-         */
-        $_SESSION['openid.assoc_handle'] = $this->headers['assoc_handle'];
-        $_SESSION['openid.mac_key'] = $mac_key;
-        $_SESSION['openid.claimed_id'] = $this->claimed_id;
-      }
+    if ($association = $this->associate()) {
+      /**
+       * A handle for an association between the Relying Party and the OP that
+       * SHOULD be used to sign the response.
+       * Note: If no association handle is sent, the transaction will take
+       * place in Stateless Mode.
+       */
+      $this->params['openid.assoc_handle'] = $association['assoc_handle'];
     }
 
     $s = strpos( $this->provider, '?' ) ? '&' : '?';
@@ -651,107 +638,117 @@ class sqOpenID {
     $this->identity = $this->claimed_id = $this->normalizeURL( $this->getResponse( 'openid_claimed_id' ) );
 
     /**
-     * check for association data in sessions if not fallback to stateless mode
+     * check for association data in cache
      */
-    if (! isset( $_SESSION )) {
-      session_start();
-    }
-    if (isset( $_SESSION['openid.assoc_handle'], $_SESSION['openid.mac_key'], $_SESSION['openid.claimed_id'] )) {
+    if ($association = $this->cache($this->getResponse('openid_op_endpoint'))) {
+      if (isset( $association['assoc_handle'], $association['mac_key'], $association['claimed_id'] )) {
 
-      /**
-       * The Claimed Identifier. "openid.claimed_id" and "openid.identity"
-       * SHALL be either both present or both absent.
-       */
-      if ( !$this->getResponse('openid_claimed_id') && !$this->getResponse(('openid_identity')) ) {
-        return false;
-      }
-
-      /**
-       * Verify that openid_sig matches signed parameters in openid_signed
-       * This list MUST contain at least "op_endpoint", "return_to"
-       * "response_nonce" and "assoc_handle", and if present in the response,
-       * "claimed_id" and "identity".
-       */
-      $must = array (
-          'op_endpoint',
-          'return_to',
-          'response_nonce',
-          'assoc_handle',
-          'claimed_id',
-          'identity'
-        );
-
-      $signed = explode( ',', $this->getResponse( 'openid_signed' ) );
-
-      /**
-       * verify that open_signed has the 'must' parameters
-       */
-      if (count( array_intersect( $must, $signed ) ) !== count( $must )) {
-        return false;
-      }
-
-      /**
-       * When the Relying Party checks the signature on an assertion, the
-       * Relying Party SHOULD ensure that an assertion has not yet been accepted
-       * with the same value for "openid.response_nonce" from the same
-       * OP Endpoint URL.
-       *
-       * @see 11.3. Checking the Nonce
-       */
-      if (isset( $_SESSION['openid.response_nonce'] ) && $_SESSION['openid.response_nonce'] == $this->getResponse( 'openid_response_nonce' )) {
-        return false;
-      } else {
-        $_SESSION['openid.response_nonce'] = $this->getResponse( 'openid_response_nonce' );
-      }
-
-      if ($_SESSION['openid.claimed_id'] != self::OPENID_IDENTIFIER_SELECT) {
-        if ($_SESSION['openid.claimed_id'] != strtok($this->claimed_id, '#')) {
+        /**
+         * The Claimed Identifier. "openid.claimed_id" and "openid.identity"
+         * SHALL be either both present or both absent.
+         */
+        if ( !$this->getResponse('openid_claimed_id') && !$this->getResponse(('openid_identity')) ) {
           return false;
         }
+
+        /**
+         * Verify that openid_sig matches signed parameters in openid_signed
+         * This list MUST contain at least "op_endpoint", "return_to"
+         * "response_nonce" and "assoc_handle", and if present in the response,
+         * "claimed_id" and "identity".
+         */
+        $must = array (
+            'op_endpoint',
+            'return_to',
+            'response_nonce',
+            'assoc_handle',
+            'claimed_id',
+            'identity'
+          );
+
+        $signed = explode( ',', $this->getResponse( 'openid_signed' ) );
+
+        /**
+         * verify that open_signed has the 'must' parameters
+         */
+        if (count( array_intersect( $must, $signed ) ) !== count( $must )) {
+          return false;
+        }
+
+        /**
+         * This is for checking the nonce, when app is behind a load balancer
+         * it is simpler to store session on a DB and available for all the
+         * instances rather to the local file system. same logic could apply to
+         * the association cache
+         */
+        if (! isset( $_SESSION )) {
+          session_start();
+        }
+        /**
+         * When the Relying Party checks the signature on an assertion, the
+         * Relying Party SHOULD ensure that an assertion has not yet been accepted
+         * with the same value for "openid.response_nonce" from the same
+         * OP Endpoint URL.
+         *
+         * @see 11.3. Checking the Nonce
+         */
+        if (isset( $_SESSION['response_nonce'] ) && $_SESSION['response_nonce'] == $this->getResponse( 'openid_response_nonce' )) {
+          return false;
+        } else {
+          $_SESSION['response_nonce'] = $this->getResponse( 'openid_response_nonce' );
+        }
+
+        if ($association['claimed_id'] != self::OPENID_IDENTIFIER_SELECT) {
+          if ($association['claimed_id'] != strtok($this->claimed_id, '#')) {
+            return false;
+          }
+        }
+
+        /**
+         * prepare fiels to sign
+         *
+         * @see 6. Generating Signatures
+         */
+        $tokens = '';
+        foreach ( $signed as $key ) {
+          $tokens .= sprintf( "%s:%s\n", $key, $this->getResponse( 'openid_' . strtr( $key, '.', '_' ) ) );
+        }
+
+        /**
+         * @see 6.2. Signature Algorithms
+         */
+        $signature = base64_encode( hash_hmac( 'sha256', $tokens, base64_decode($association['mac_key']), true ) );
+
+        /**
+         * check if signatures match
+         *
+         * @return boolean
+         */
+        return $this->getResponse( 'openid_sig' ) === $signature;
       }
+    } else {
+      /**
+       * Stateless 'dumb' mode needs to found again the OP Endpoint URL.
+       */
+      $this->Discover();
 
       /**
-       * prepare fiels to sign
-       *
-       * @see 6. Generating Signatures
+       * @see 11.4.2.1. Request Parameters Exact copies of all fields from the
+       * authentication response, except for "openid.mode".
        */
-      $tokens = '';
-      foreach ( $signed as $key ) {
-        $tokens .= sprintf( "%s:%s\n", $key, $this->getResponse( 'openid_' . strtr( $key, '.', '_' ) ) );
+      $params = array ();
+      foreach ( $this->getResponse() as $key => $value ) {
+        /* replace _ with . openid.* */
+        $params[preg_replace( '#_#', '.', $key, 1 )] = $value;
       }
+      $params['openid.mode'] = 'check_authentication';
 
-      /**
-       * @see 6.2. Signature Algorithms
-       */
-      $signature = base64_encode( hash_hmac( 'sha256', $tokens, $_SESSION['openid.mac_key'], true ) );
+      $this->request( $this->provider, false, 'POST', $params );
 
-      /**
-       * check if signatures match
-       *
-       * @return boolean
-       */
-      return $this->getResponse( 'openid_sig' ) === $signature;
+      return (isset( $this->headers['is_valid'] ) && $this->headers['is_valid'] == 'true') ? true : false;
     }
 
-    /**
-     * Stateless 'dumb' mode needs to found again the OP Endpoint URL.
-     */
-    $this->Discover();
-
-    /**
-     * @see 11.4.2.1. Request Parameters Exact copies of all fields from the
-     * authentication response, except for "openid.mode".
-     */
-    $params = array ();
-    foreach ( $this->getResponse() as $key => $value ) {
-      /* replace _ with . openid.* */
-      $params[preg_replace( '#_#', '.', $key, 1 )] = $value;
-    }
-    $params['openid.mode'] = 'check_authentication';
-
-    $this->request( $this->provider, false, 'POST', $params );
-
-    return (isset( $this->headers['is_valid'] ) && $this->headers['is_valid'] == 'true') ? true : false;
+    return false;
   }
 
   /**
@@ -763,6 +760,14 @@ class sqOpenID {
    * @see 8. Establishing Associations
    */
   protected function associate() {
+    /**
+     * check if we have an association in the cache
+     * @return array Association
+     */
+    if ($association = $this->cache($this->provider)) {
+      return $association;
+    }
+
     $private_key = gmp_random(16);
     $public_key = base64_encode($this->btwocEncode(gmp_strval(gmp_powm(self::OPENID_DH_GEN, $private_key, self::OPENID_DH_MODULUS))));
     /**
@@ -785,12 +790,81 @@ class sqOpenID {
         /**
          * decrypt & return the mac_key (shared secret)
          */
-        return $this->openidXOR( hash( 'sha256', $ZZ, true ), base64_decode( $enc_mac_key ) );
+        $secret = $this->openidXOR( hash( 'sha256', $ZZ, true ), base64_decode( $enc_mac_key ) );
+
+        /**
+         * store association in cache
+         */
+        if ($this->cache( $this->provider, json_encode( array_merge( $this->headers, array('claimed_id' => $this->claimed_id, 'op_endpoint' => $this->provider, 'mac_key' => base64_encode($secret)) ) ), $this->headers['expires_in'] ) ) {
+          return array('assoc_handle' => $this->headers['assoc_handle']);
+        } else {
+          return false;
+        }
       } else {
         return false;
       }
     } else {
       return false;
+    }
+  }
+
+  /**
+   * cache for associations
+   */
+  protected function cache($openid_op_endpoint, $data = false, $expire = null) {
+    $cache_dir = defined('OPENID_CACHE_DIR') ? OPENID_CACHE_DIR : '/tmp/openid/';
+
+    if (!file_exists($cache_dir)) {
+      if (!mkdir($cache_dir, 0750, true)) {
+        trigger_error('ERROR -> ' . __METHOD__ . ": Cache - Cannot create dir: $cache_dir", E_USER_NOTICE);
+        return false;
+      }
+    }
+
+    $cache_file = "$cache_dir/" . sha1($openid_op_endpoint);
+
+    /**
+     * write to cache
+     */
+    if ($data) {
+      if (!($fp = fopen($cache_file, 'w'))) {
+        trigger_error('ERROR -> ' . __METHOD__ . ": Cache - Cannot create cache file $cache_file", E_USER_NOTICE);
+        return false;
+      }
+      if (flock($fp, LOCK_EX) && ftruncate($fp, 0)) {
+        if (fwrite($fp, $data)) {
+          flock($fp, LOCK_UN);
+          fclose($fp);
+          chmod($cache_file, 0644);
+          $time = time() + ($expire ?: 3600);
+          touch($cache_file, $time);
+          return true;
+        } else {
+          return false;
+        }
+      } else {
+        trigger_error('ERROR -> ' . __METHOD__ . ": Cache Cannot lock/truncate the cache file: $cache_file", E_USER_NOTICE);
+        return false;
+      }
+    } else {
+      /**
+       * get association from cache
+       */
+      $content = @file_get_contents($cache_file);
+      if ($content) {
+        $cache = json_decode(file_get_contents($cache_file), 1);
+        $time = time();
+        $cache_time = filemtime($cache_file);
+        $life = $cache_time - $time;
+        if ($life > 0) {
+          return $cache;
+        } else {
+          @unlink($cache_file);
+          return false;
+        }
+      } else {
+        return false;
+      }
     }
   }
 

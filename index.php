@@ -30,6 +30,7 @@ require_once 'sqopenid.php';
     <form method="post">
       <input id="oi" type="text" name="openid_identifier" size="40" placeholder="enter your Identifier" />
       <input type="submit" value="Login test" />
+      <input type="reset" value="Reset" onClick="window.location.href='/'">
     </form>
     <br>
     test-id.net identifiers to use:

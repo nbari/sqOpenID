@@ -18,7 +18,7 @@ Requirements:
 ============
 PHP 5 or higher
 
-PHP sessions
+PHP sessions (for verifying the nonce behind a load balancer)
 
 PHP cURL Library
 
@@ -69,5 +69,3 @@ Basic example:
     }
 
 work still pending...
-
-TODO: cache for keeping handlers and nonces
