@@ -640,8 +640,8 @@ class sqOpenID {
     /**
      * check for association data in cache
      */
-    if ($association = $this->cache($this->getResponse('openid_op_endpoint'))) {
-      if (isset( $association['assoc_handle'], $association['mac_key'], $association['claimed_id'] )) {
+    if ( ($association = $this->cache($this->getResponse('openid_op_endpoint'))) && ! $this->getResponse('openid_invalidate_handle') ) {
+      if (isset( $association['assoc_handle'], $association['mac_key'] )) {
 
         /**
          * The Claimed Identifier. "openid.claimed_id" and "openid.identity"
@@ -698,12 +698,6 @@ class sqOpenID {
           $_SESSION['response_nonce'] = $this->getResponse( 'openid_response_nonce' );
         }
 
-        if ($association['claimed_id'] != self::OPENID_IDENTIFIER_SELECT) {
-          if ($association['claimed_id'] != strtok($this->claimed_id, '#')) {
-            return false;
-          }
-        }
-
         /**
          * prepare fiels to sign
          *
@@ -727,6 +721,12 @@ class sqOpenID {
         return $this->getResponse( 'openid_sig' ) === $signature;
       }
     } else {
+      /**
+       * clean openid.invalidate_handle
+       * by setting a cache with an expiry in the past (-1) should be enough
+       */
+      $this->cache($this->getResponse('openid_op_endpoint'), true, -1);
+
       /**
        * Stateless 'dumb' mode needs to found again the OP Endpoint URL.
        */
@@ -795,7 +795,7 @@ class sqOpenID {
         /**
          * store association in cache
          */
-        if ($this->cache( $this->provider, json_encode( array_merge( $this->headers, array('claimed_id' => $this->claimed_id, 'op_endpoint' => $this->provider, 'mac_key' => base64_encode($secret)) ) ), $this->headers['expires_in'] ) ) {
+        if ($this->cache( $this->provider, json_encode( array_merge( $this->headers, array( 'op_endpoint' => $this->provider, 'mac_key' => base64_encode($secret)) ) ), $this->headers['expires_in'] ) ) {
           return array('assoc_handle' => $this->headers['assoc_handle']);
         } else {
           return false;
@@ -852,11 +852,11 @@ class sqOpenID {
        */
       $content = @file_get_contents($cache_file);
       if ($content) {
-        $cache = json_decode(file_get_contents($cache_file), 1);
+        $cache = json_decode($content, 1);
         $time = time();
         $cache_time = filemtime($cache_file);
         $life = $cache_time - $time;
-        if ($life > 0) {
+        if ( $life > 0 && is_array($cache) ) {
           return $cache;
         } else {
           @unlink($cache_file);
