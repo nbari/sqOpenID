@@ -371,20 +371,20 @@ class sqOpenID {
           foreach ( $xml->children( self::OPENID_NS_XRD )->XRD as $xrd ) {
             foreach ( $xrd->children( self::OPENID_NS_XRD )->Service as $service_element ) {
               $service = array (
-                  'priority' => $service_element->attributes()->priority ? ( int ) $service_element->attributes()->priority : PHP_INT_MAX,
+                  'priority' => $service_element->attributes()->priority ? (int) $service_element->attributes()->priority : PHP_INT_MAX,
                   'types' => array (),
-                  'uri' => ( string ) $service_element->URI,
-                  'identity' => ( string ) $service_element->LocalID ?  : false
+                  'uri' => (string) $service_element->URI,
+                  'identity' => (string) $service_element->LocalID ?  : false
               );
               /**
                *
                * @see 7.3.2.3. XRI and the CanonicalID Element
                */
               if ($this->xri) {
-                $service['canonicalid'] = ( string ) $xrd->children( self::OPENID_NS_XRD )->CanonicalID;
+                $service['canonicalid'] = (string) $xrd->children( self::OPENID_NS_XRD )->CanonicalID;
               }
-              foreach ( $service_element->Type as $type ) {
-                $service['types'][] = ( string ) $type;
+              foreach ($service_element->Type as $type) {
+                $service['types'][] = (string) $type;
               }
               /* search for openid v2 ns */
               $ns = preg_quote( self::OPENID_NS_2_0, '#' );
@@ -413,7 +413,7 @@ class sqOpenID {
         $selected_type_priority = FALSE;
         $type_priority = 0;
 
-        foreach ( $services as $service ) {
+        foreach ($services as $service) {
           if (! empty( $service['uri'] )) {
             if (in_array( self::OPENID_NS_2_0 . '/server', $service['types'] )) {
               $type_priority = 1;
@@ -467,7 +467,7 @@ class sqOpenID {
         @$html_dom = DOMDocument::loadHTML( $this->body );
         if ($html_dom) {
           $html_element = simplexml_import_dom( $html_dom );
-          foreach ( $html_element->head->meta as $meta ) {
+          foreach ($html_element->head->meta as $meta) {
             // The http-equiv attribute is case-insensitive.
             if (strtolower( trim( $meta['http-equiv'] ) ) == 'x-xrds-location') {
               return $this->DiscoverYadis( trim( $meta['content'] ) );
@@ -503,7 +503,7 @@ class sqOpenID {
     @$html_dom = DOMDocument::loadHTML( $body );
     if ($html_dom) {
       $html_element = simplexml_import_dom( $html_dom );
-      foreach ( $html_element->head->link as $link ) {
+      foreach ($html_element->head->link as $link) {
         if (preg_match( '#(\s|^)openid2.provider(\s|$)#i', $link['rel'] )) {
           $this->provider = trim( $link['href'] );
         }
@@ -524,6 +524,7 @@ class sqOpenID {
    *
    * @see 9.1. Request Parameters
    * @link http://openid.net/specs/openid-authentication-2_0.html#anchor27
+   * @return string OP Endpoint URL
    */
   public function Auth() {
     $this->params = array (
@@ -554,12 +555,12 @@ class sqOpenID {
     }
 
     $s = strpos( $this->provider, '?' ) ? '&' : '?';
-    $url = $this->provider . $s . http_build_query( $this->params, '', '&' );
-
     /**
-     * redirect to OP Endpoint URL
+     * client must be redirected to the OP Endpoint URL
+     * we return the URL and don't use header('location: ...') here because  'AJAX'.
+     * developer must found a way to redirect the use to the OP Endpoint
      */
-    header( "Location: $url" );
+    return $this->provider . $s . http_build_query( $this->params, '', '&' );
   }
 
   /**
@@ -596,13 +597,13 @@ class sqOpenID {
      * $this->optional contains an array of optional AX parameters.
      */
     foreach ( array ('required', 'optional') as $type ) {
-      foreach ( $this->$type as $path => $key ) {
+      foreach ($this->$type as $path => $key) {
         $alias = strtr($path, '/', '_');
         $aliases[$alias] = 'http://axschema.org/' . $path;
         ${$type}[] = $alias;
       }
     }
-    foreach ( $aliases as $alias => $ns ) {
+    foreach ($aliases as $alias => $ns) {
       $this->params['openid.ax.type.' . $alias] = $ns;
     }
     if ($required) {
@@ -704,7 +705,7 @@ class sqOpenID {
          * @see 6. Generating Signatures
          */
         $tokens = '';
-        foreach ( $signed as $key ) {
+        foreach ($signed as $key) {
           $tokens .= sprintf( "%s:%s\n", $key, $this->getResponse( 'openid_' . strtr( $key, '.', '_' ) ) );
         }
 
@@ -894,7 +895,7 @@ class sqOpenID {
     }
 
     $string = '';
-    foreach ( $bytes as $byte ) {
+    foreach ($bytes as $byte) {
       $string .= pack( 'C', $byte );
     }
 
@@ -912,7 +913,7 @@ class sqOpenID {
     $bytes = array_merge( unpack( 'C*', $str ) );
     $n = 0;
 
-    foreach ( $bytes as $byte ) {
+    foreach ($bytes as $byte) {
       $n = gmp_mul( $n, pow( 2, 8 ) );
       $n = gmp_add( $n, $byte );
     }
@@ -1062,5 +1063,3 @@ class sqOpenID {
   }
 
 }
-
-?>
