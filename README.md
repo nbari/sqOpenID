@@ -62,10 +62,8 @@ Basic example:
         $oi->optional('pref/language', 'pref/timezone');
 
         /* redirect user to OP Endpoint URL */
-        $oi->Auth();
+        header('Location: '. $oi->Auth());
       } else {
         echo 'no OP found';
       }
     }
-
-work still pending...

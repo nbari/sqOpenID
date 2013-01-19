@@ -67,7 +67,7 @@ require_once 'sqopenid.php';
             /**
              * if OP Endpoint URL found, redirect the user to it.
              */
-            $oi->Auth();
+            header('Location: '. $oi->Auth());
           }
         }
       }
